@@ -9,7 +9,7 @@ import prisma from '../../config/db';
 export class FreshGuaranteeController {
   async confirmReceipt(req: AuthRequest, res: Response): Promise<any> {
     try {
-      const orderId = req.params.id;
+      const orderId = req.params.id as string;
       const data = ConfirmReceiptInput.parse({ ...req.body, order_id: orderId });
       
       const result = await freshGuaranteeService.confirmReceipt(req.user!.id, data);
@@ -33,7 +33,7 @@ export class FreshGuaranteeController {
   async getClaimStatus(req: AuthRequest, res: Response): Promise<any> {
     try {
       const claim = await prisma.claim.findUnique({
-        where: { id: req.params.id },
+        where: { id: req.params.id as string },
       });
 
       if (!claim) return errorResponse(res, 'Claim not found', 404);
@@ -51,7 +51,7 @@ export class FreshGuaranteeController {
     try {
       if (req.user!.role !== 'admin') return errorResponse(res, 'Admin only', 403);
 
-      const claim = await freshGuaranteeService.approveClaim(req.user!.id, req.params.id);
+      const claim = await freshGuaranteeService.approveClaim(req.user!.id, req.params.id as string);
       return successResponse(res, claim, 'Claim approved and refund processed');
     } catch (error: any) {
       return errorResponse(res, error.message || 'Failed to approve claim', 400);
@@ -65,7 +65,7 @@ export class FreshGuaranteeController {
       const { reason } = req.body;
       if (!reason) return errorResponse(res, 'Rejection reason is required', 400);
 
-      const claim = await freshGuaranteeService.rejectClaim(req.user!.id, req.params.id, reason);
+      const claim = await freshGuaranteeService.rejectClaim(req.user!.id, req.params.id as string, reason);
       return successResponse(res, claim, 'Claim rejected');
     } catch (error: any) {
       return errorResponse(res, error.message || 'Failed to reject claim', 400);
