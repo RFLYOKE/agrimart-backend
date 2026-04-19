@@ -126,6 +126,8 @@ model Order {
   status         OrderStatus @default(pending)
   payment_method String?
   address        Json?
+  received_condition String?
+  confirmed_at   DateTime?
   created_at     DateTime    @default(now())
 
   buyer          User        @relation("BuyerOrders", fields: [buyer_id], references: [id])
@@ -225,8 +227,12 @@ model Claim {
   order_id      String      @db.Uuid
   user_id       String      @db.Uuid
   status        ClaimStatus @default(pending)
+  issue_type    String?
+  description   String?     @db.Text
   photo_urls    String[]
+  refund_type   String?
   refund_amount Decimal     @db.Decimal(10, 2)
+  reject_reason String?     @db.Text
   created_at    DateTime    @default(now())
 
   order         Order       @relation(fields: [order_id], references: [id])

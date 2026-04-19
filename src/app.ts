@@ -12,6 +12,7 @@ import marketplaceRoutes from './modules/marketplace/routes';
 import auctionRoutes from './modules/auction/routes';
 import consultRoutes from './modules/consult/routes';
 import notificationRoutes from './modules/notification/routes';
+import freshGuaranteeRoutes from './modules/fresh-guarantee/routes';
 
 const app: Application = express();
 
@@ -83,6 +84,7 @@ app.use('/api/marketplace', marketplaceRoutes);
 app.use('/api/auctions', auctionRoutes);
 app.use('/api/consult', consultRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/fresh-guarantee', freshGuaranteeRoutes);
 
 // ============================================
 // Error Handling
