@@ -1,6 +1,10 @@
 import app from './app';
 import { env } from './config/env';
 import logger from './utils/logger';
+import { initSocket } from './config/socket';
+import { consultSocketHandler } from './modules/consult/socket';
+import { auctionSocketHandler } from './modules/auction/socket';
+import { startAuctionCron } from './modules/auction/cron';
 
 const PORT = env.PORT;
 
@@ -10,6 +14,14 @@ const server = app.listen(PORT, () => {
   logger.info(`🔗 URL: http://localhost:${PORT}`);
   logger.info(`❤️  Health: http://localhost:${PORT}/api/health`);
 });
+
+// Attach Socket.io server
+const io = initSocket(server);
+consultSocketHandler(io);
+auctionSocketHandler(io);
+
+// Initialize Background Cron Jobs
+startAuctionCron();
 
 // Graceful shutdown
 const gracefulShutdown = (signal: string) => {
