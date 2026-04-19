@@ -88,3 +88,20 @@ export const buildPaginatedResponse = <T>(
     },
   };
 };
+
+export const paginate = (page: number = 1, limit: number = 10) => {
+  const p = Math.max(1, Number(page));
+  const l = Math.max(1, Number(limit));
+  const skip = (p - 1) * l;
+  const take = l;
+
+  return { skip, take };
+};
+
+export const paginationMeta = (total: number, page: number = 1, limit: number = 10) => {
+  const p = Math.max(1, Number(page));
+  const l = Math.max(1, Number(limit));
+  const totalPages = Math.ceil(total / l);
+
+  return { total, page: p, limit: l, totalPages };
+};
