@@ -45,7 +45,7 @@ export const logger = {
   },
 
   debug: (message: string, ...args: unknown[]): void => {
-    if (env.isDevelopment) {
+    if (env.NODE_ENV === 'development') {
       console.debug(formatMessage(LogLevel.DEBUG, message, colors.debug), ...args);
     }
   },

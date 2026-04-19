@@ -1,6 +1,6 @@
 import prisma from '../../config/db';
 import { CreateProductType, UpdateProductType, CreateOrderType, OrderFilterQueryType } from './schema';
-import { OrderStatus } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 
 import { paymentService } from '../payment/service';
 
@@ -102,7 +102,7 @@ export class MarketplaceService {
         price_b2c: data.price_b2c,
         price_b2b: data.price_b2b,
         stock: data.stock,
-        category: data.category,
+        category: data.category || 'general',
         images: data.images,
       },
     });
@@ -173,18 +173,18 @@ export class MarketplaceService {
         });
       }
 
-      const order = await tx.order.create({
+      const order = await (tx.order as any).create({
         data: {
           buyer_id: buyerId,
           total: totalPrice,
           payment_method: data.payment_method,
           address: data.address as any,
           status: 'pending',
-          items: {
+          order_items: {
             create: orderItemsData,
           },
         },
-        include: { items: true },
+        include: { order_items: true },
       });
 
       const customerDetails = {
@@ -212,17 +212,17 @@ export class MarketplaceService {
     const whereClause: any = { buyer_id: userId };
 
     if (filters.status) {
-      whereClause.status = filters.status as OrderStatus;
+      whereClause.status = filters.status as string;
     }
 
     const [total, orders] = await Promise.all([
-      prisma.order.count({ where: whereClause }),
-      prisma.order.findMany({
+      prisma.order.count({ where: { ...whereClause } }),
+      (prisma.order as any).findMany({
         where: whereClause,
         skip,
         take,
         include: {
-          items: {
+          order_items: {
             include: {
               product: {
                 select: { name: true, images: true },
@@ -237,7 +237,7 @@ export class MarketplaceService {
     return { total, orders };
   }
 
-  async updateOrderStatus(orderId: string, userId: string, status: OrderStatus) {
+  async updateOrderStatus(orderId: string, userId: string, status: string) {
     // Validate coop ownership of the order's items
     const coop = await prisma.cooperative.findUnique({
       where: { user_id: userId },
@@ -245,10 +245,10 @@ export class MarketplaceService {
 
     if (!coop) throw new Error('Not authorized: Cooperative not found');
 
-    const order = await prisma.order.findUnique({
+    const order = await (prisma.order as any).findUnique({
       where: { id: orderId },
       include: {
-        items: {
+        order_items: {
           include: { product: true },
         },
       },
@@ -257,14 +257,14 @@ export class MarketplaceService {
     if (!order) throw new Error('Order not found');
 
     // Assumes order items belong to the same cooperative or checks if any item belongs to the cooperative
-    const hasOwnership = order.items.some((item) => item.product.coop_id === coop.id);
+    const hasOwnership = order.order_items.some((item: any) => item.product.coop_id === coop.id);
     if (!hasOwnership) {
       throw new Error('Not authorized: Order does not contain products from your cooperative');
     }
 
     return prisma.order.update({
       where: { id: orderId },
-      data: { status },
+      data: { status } as any,
     });
   }
 }

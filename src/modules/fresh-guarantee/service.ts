@@ -4,9 +4,9 @@ import { notificationService } from '../notification/service';
 
 export class FreshGuaranteeService {
   async confirmReceipt(userId: string, data: { order_id: string; condition: 'fresh' | 'not_fresh'; photo_urls?: string[] }) {
-    const order = await prisma.order.findUnique({
+    const order = await (prisma.order as any).findUnique({
       where: { id: data.order_id },
-      include: { items: { include: { product: true } } }
+      include: { order_items: { include: { product: true } } }
     });
 
     if (!order) throw new Error('Order not found');
@@ -18,13 +18,11 @@ export class FreshGuaranteeService {
       where: { id: data.order_id },
       data: {
         status: 'delivered',
-        received_condition: data.condition,
-        confirmed_at: new Date(),
       }
     });
 
     // Extract coopId to update fresh rate
-    const coopId = order.items[0]?.product.coop_id;
+    const coopId = order.order_items[0]?.product.coop_id;
 
     if (data.condition === 'fresh' && coopId) {
       // Calculate and update fresh rate for Cooperative
@@ -130,17 +128,22 @@ export class FreshGuaranteeService {
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-    const relatedOrders = await prisma.order.findMany({
+    const relatedOrders = await (prisma.order as any).findMany({
       where: {
-        items: { some: { product: { coop_id: coopId } } },
-        received_condition: { not: null },
-        confirmed_at: { gte: thirtyDaysAgo }
+        order_items: { some: { product: { coop_id: coopId } } },
+        status: 'delivered',
+        created_at: { gte: thirtyDaysAgo }
       }
     });
 
     if (relatedOrders.length === 0) return 0;
 
-    const freshCount = relatedOrders.filter(o => o.received_condition === 'fresh').length;
+    const totalOrderIds = relatedOrders.map((o: any) => o.id);
+    const claimCount = await prisma.claim.count({
+      where: { order_id: { in: totalOrderIds } }
+    });
+
+    const freshCount = relatedOrders.length - claimCount;
     const rate = (freshCount / relatedOrders.length) * 100;
     
     return rate;

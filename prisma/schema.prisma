@@ -6,7 +6,9 @@ datasource db {
   provider = "postgresql"
 }
 
-enum UserRole {
+// --- CORE: USER & AUTH ---
+
+enum Role {
   koperasi
   konsumen
   hotel_restoran
@@ -14,255 +16,545 @@ enum UserRole {
   admin
 }
 
-enum OrderStatus {
-  pending
-  paid
-  processing
-  shipped
-  delivered
-  cancelled
-}
-
-enum AuctionType {
-  flash
-  regular
-}
-
-enum AuctionStatus {
+enum UserStatus {
   active
-  closed
-  cancelled
-}
-
-enum SessionStatus {
-  booked
-  active
-  ended
-}
-
-enum MessageType {
-  text
-  image
-  document
-}
-
-enum ClaimStatus {
-  pending
-  approved
-  rejected
-}
-
-enum DeviceType {
-  android
-  ios
-  web
+  suspended
+  banned
 }
 
 model User {
-  id               String            @id @default(uuid()) @db.Uuid
-  role             UserRole
-  name             String
-  phone            String?
-  email            String            @unique
-  password_hash    String
-  status           String            @default("active")
-  created_at       DateTime          @default(now())
+  id            String     @id @default(uuid())
+  role          Role
+  name          String
+  phone         String?    @unique
+  email         String?    @unique
+  password_hash String?
+  google_id     String?    @unique
+  apple_id      String?    @unique
+  phone_verified Boolean   @default(false)
+  status        UserStatus @default(active)
+  created_at    DateTime   @default(now())
 
-  cooperative      Cooperative?
-  orders           Order[]           @relation("BuyerOrders")
-  bids             Bid[]
-  consult_sessions_as_user ConsultSession[] @relation("SessionUser")
-  consult_sessions_as_consultant ConsultSession[] @relation("SessionConsultant")
-  messages         Message[]
-  price_alerts     PriceAlert[]
-  claims           Claim[]
-  fcm_tokens       FCMToken[]        @relation("UserTokens")
-  notifications    Notification[]    @relation("UserNotifications")
+  cooperative       Cooperative?
+  orders            Order[]           @relation("BuyerOrders")
+  bids              Bid[]
+  consult_sessions  ConsultSession[]  @relation("UserSessions")
+  consultant_sessions ConsultSession[] @relation("ConsultantSessions")
+  enrollments       Enrollment[]
+  tickets           Ticket[]
+  forum_threads     ForumThread[]
+  forum_comments    ForumComment[]
+  price_alerts      PriceAlert[]
+  claims            Claim[]
+  fcm_tokens        FcmToken[]
+  rfq_requests      RfqRequest[]
+  subscriptions     Subscription[]    @relation("HotelSubscriptions")
+  bulk_orders       BulkOrder[]
+  invoices          Invoice[]
+  export_documents  ExportDocument[]
+  admin_logs        AdminLog[]        @relation("AdminActions")
+  group_buy_sessions GroupBuy[]       @relation("InitiatorGroupBuy")
+  group_buy_members  GroupBuyMember[]
+  gift_orders       Order[]           @relation("GiftOrders")
+  bookmarks         NewsBookmark[]
+  point_ledger      ForumPoint[]
+}
 
-  @@map("users")
+model FcmToken {
+  id          String   @id @default(uuid())
+  user_id     String
+  token       String   @unique
+  device_type String
+  updated_at  DateTime @updatedAt
+  user        User     @relation(fields: [user_id], references: [id])
+}
+
+// --- KOPERASI ---
+
+enum CoopCertStatus {
+  pending
+  verified
+  rejected
 }
 
 model Cooperative {
-  id           String    @id @default(uuid()) @db.Uuid
-  user_id      String    @unique @db.Uuid
+  id           String         @id @default(uuid())
+  user_id      String         @unique
   name         String
+  sector       String         // pertanian | perikanan | peternakan
   location     String
   description  String?
-  cert_status  String?
+  cert_status  CoopCertStatus @default(pending)
   verified_at  DateTime?
-  fresh_rate   Float?
-
-  user         User      @relation(fields: [user_id], references: [id])
+  fresh_rate   Float          @default(0)
+  user         User           @relation(fields: [user_id], references: [id])
   products     Product[]
-
-  @@map("cooperatives")
+  certifications Certification[]
+  rfq_quotes   RfqQuote[]
+  subscriptions Subscription[] @relation("CoopSubscriptions")
 }
 
+// --- PRODUK & MARKETPLACE ---
+
 model Product {
-  id           String       @id @default(uuid()) @db.Uuid
-  coop_id      String       @db.Uuid
-  name         String
-  description  String?
-  price_b2c    Decimal      @db.Decimal(10, 2)
-  price_b2b    Decimal      @db.Decimal(10, 2)
-  stock        Int
-  category     String?
-  images       String[]
-  is_active    Boolean      @default(true)
-  created_at   DateTime     @default(now())
-
-  cooperative  Cooperative  @relation(fields: [coop_id], references: [id])
-  order_items  OrderItem[]
-  auctions     Auction[]
+  id          String      @id @default(uuid())
+  coop_id     String
+  name        String
+  description String?
+  price_b2c   Decimal
+  price_b2b   Decimal
+  stock       Int
+  category    String
+  images      String[]
+  is_active   Boolean     @default(true)
+  created_at  DateTime    @default(now())
+  cooperative Cooperative @relation(fields: [coop_id], references: [id])
+  order_items OrderItem[]
+  auctions    Auction[]
   price_alerts PriceAlert[]
-
-  @@map("products")
+  group_buys  GroupBuy[]
 }
 
 model Order {
-  id             String      @id @default(uuid()) @db.Uuid
-  buyer_id       String      @db.Uuid
-  total          Decimal     @db.Decimal(10, 2)
-  status         OrderStatus @default(pending)
-  payment_method String?
-  address        Json?
-  received_condition String?
-  confirmed_at   DateTime?
+  id             String      @id @default(uuid())
+  buyer_id       String
+  gift_sender_id String?
+  total          Decimal
+  status         String      // pending|paid|processing|shipped|delivered|cancelled|refunded
+  payment_method String
+  snap_token     String?
+  address        Json
+  gift_card_msg  String?
+  is_gift        Boolean     @default(false)
+  recipient_name String?
   created_at     DateTime    @default(now())
-
   buyer          User        @relation("BuyerOrders", fields: [buyer_id], references: [id])
-  items          OrderItem[]
-  claims         Claim[]
-
-  @@map("orders")
+  gift_sender    User?       @relation("GiftOrders", fields: [gift_sender_id], references: [id])
+  order_items    OrderItem[]
+  claim          Claim?
+  invoice_id     String?
 }
 
 model OrderItem {
-  id             String  @id @default(uuid()) @db.Uuid
-  order_id       String  @db.Uuid
-  product_id     String  @db.Uuid
+  id             String  @id @default(uuid())
+  order_id       String
+  product_id     String
   qty            Int
-  price_at_order Decimal @db.Decimal(10, 2)
-
+  price_at_order Decimal
   order          Order   @relation(fields: [order_id], references: [id])
   product        Product @relation(fields: [product_id], references: [id])
-
-  @@map("order_items")
 }
 
+// --- AUCTION ---
+
 model Auction {
-  id            String        @id @default(uuid()) @db.Uuid
-  product_id    String        @db.Uuid
-  type          AuctionType
-  start_price   Decimal       @db.Decimal(10, 2)
-  current_price Decimal       @db.Decimal(10, 2)
+  id            String   @id @default(uuid())
+  product_id    String
+  type          String   // flash | regular
+  start_price   Decimal
+  current_price Decimal
   end_time      DateTime
-  status        AuctionStatus @default(active)
-
-  product       Product       @relation(fields: [product_id], references: [id])
+  status        String   // active | closed | cancelled
+  auto_bid_limit Decimal?
+  created_at    DateTime @default(now())
+  product       Product  @relation(fields: [product_id], references: [id])
   bids          Bid[]
-
-  @@map("auctions")
+  watchlist     AuctionWatchlist[]
 }
 
 model Bid {
-  id         String   @id @default(uuid()) @db.Uuid
-  auction_id String   @db.Uuid
-  user_id    String   @db.Uuid
-  amount     Decimal  @db.Decimal(10, 2)
+  id         String   @id @default(uuid())
+  auction_id String
+  user_id    String
+  amount     Decimal
   created_at DateTime @default(now())
-
   auction    Auction  @relation(fields: [auction_id], references: [id])
   user       User     @relation(fields: [user_id], references: [id])
-
-  @@map("bids")
 }
 
+model AuctionWatchlist {
+  id         String  @id @default(uuid())
+  auction_id String
+  user_id    String
+  auction    Auction @relation(fields: [auction_id], references: [id])
+}
+
+// --- KONSULTASI ---
+
 model ConsultSession {
-  id            String        @id @default(uuid()) @db.Uuid
-  user_id       String        @db.Uuid
-  consultant_id String        @db.Uuid
-  status        SessionStatus @default(booked)
-  duration_min  Int
-  started_at    DateTime?
-  ended_at      DateTime?
-
-  user          User          @relation("SessionUser", fields: [user_id], references: [id])
-  consultant    User          @relation("SessionConsultant", fields: [consultant_id], references: [id])
-  messages      Message[]
-
-  @@map("consult_sessions")
+  id             String    @id @default(uuid())
+  user_id        String
+  consultant_id  String
+  status         String    // booked | active | ended
+  duration_min   Int
+  started_at     DateTime?
+  ended_at       DateTime?
+  user           User      @relation("UserSessions", fields: [user_id], references: [id])
+  consultant     User      @relation("ConsultantSessions", fields: [consultant_id], references: [id])
+  messages       Message[]
 }
 
 model Message {
-  id         String      @id @default(uuid()) @db.Uuid
-  session_id String      @db.Uuid
-  sender_id  String      @db.Uuid
-  content    String      @db.Text
-  type       MessageType @default(text)
-  sent_at    DateTime    @default(now())
-
+  id         String         @id @default(uuid())
+  session_id String
+  sender_id  String
+  content    String
+  type       String         // text | image | document
+  sent_at    DateTime       @default(now())
   session    ConsultSession @relation(fields: [session_id], references: [id])
-  sender     User           @relation(fields: [sender_id], references: [id])
-
-  @@map("messages")
 }
 
-model PriceAlert {
-  id           String    @id @default(uuid()) @db.Uuid
-  user_id      String    @db.Uuid
-  product_id   String    @db.Uuid
-  target_price Decimal   @db.Decimal(10, 2)
-  is_active    Boolean   @default(true)
-  triggered_at DateTime?
+// --- ACADEMY & WEBINAR ---
 
-  user         User      @relation(fields: [user_id], references: [id])
-  product      Product   @relation(fields: [product_id], references: [id])
-
-  @@map("price_alerts")
+model Course {
+  id            String       @id @default(uuid())
+  instructor_id String
+  title         String
+  description   String?
+  category      String       // pertanian | perikanan | peternakan | bisnis
+  thumbnail     String?
+  price         Decimal
+  created_at    DateTime     @default(now())
+  modules       CourseModule[]
+  enrollments   Enrollment[]
 }
+
+model CourseModule {
+  id          String   @id @default(uuid())
+  course_id   String
+  title       String
+  video_url   String
+  duration_sec Int
+  order_index Int
+  course      Course   @relation(fields: [course_id], references: [id])
+  quiz_questions QuizQuestion[]
+}
+
+model QuizQuestion {
+  id        String       @id @default(uuid())
+  module_id String
+  question  String
+  options   Json
+  answer    String
+  module    CourseModule @relation(fields: [module_id], references: [id])
+}
+
+model Enrollment {
+  id          String   @id @default(uuid())
+  user_id     String
+  course_id   String
+  progress    Json     @default("{}")
+  completed   Boolean  @default(false)
+  enrolled_at DateTime @default(now())
+  user        User     @relation(fields: [user_id], references: [id])
+  course      Course   @relation(fields: [course_id], references: [id])
+}
+
+model Event {
+  id          String    @id @default(uuid())
+  title       String
+  description String?
+  speaker     String
+  scheduled_at DateTime
+  duration_min Int
+  price       Decimal
+  stream_url  String?
+  recording_url String?
+  status      String    // upcoming | live | ended
+  created_at  DateTime  @default(now())
+  tickets     Ticket[]
+}
+
+model Ticket {
+  id         String   @id @default(uuid())
+  event_id   String
+  user_id    String
+  status     String   // confirmed | cancelled
+  created_at DateTime @default(now())
+  event      Event    @relation(fields: [event_id], references: [id])
+  user       User     @relation(fields: [user_id], references: [id])
+}
+
+// --- FORUM ---
+
+model ForumThread {
+  id         String         @id @default(uuid())
+  user_id    String
+  title      String
+  content    String
+  category   String
+  upvotes    Int            @default(0)
+  created_at DateTime       @default(now())
+  user       User           @relation(fields: [user_id], references: [id])
+  comments   ForumComment[]
+}
+
+model ForumComment {
+  id        String      @id @default(uuid())
+  thread_id String
+  user_id   String
+  content   String
+  upvotes   Int         @default(0)
+  is_expert Boolean     @default(false)
+  created_at DateTime   @default(now())
+  thread    ForumThread @relation(fields: [thread_id], references: [id])
+  user      User        @relation(fields: [user_id], references: [id])
+}
+
+model ForumPoint {
+  id      String @id @default(uuid())
+  user_id String
+  points  Int
+  reason  String
+  created_at DateTime @default(now())
+  user    User   @relation(fields: [user_id], references: [id])
+}
+
+// --- SERTIFIKASI ---
+
+model Certification {
+  id       String      @id @default(uuid())
+  coop_id  String
+  type     String      // Halal | Organik | GlobalGAP | HACCP | SNI
+  doc_url  String
+  valid_until DateTime
+  status   String      // pending | verified | expired
+  qr_code  String      @unique
+  issued_at DateTime?
+  cooperative Cooperative @relation(fields: [coop_id], references: [id])
+}
+
+// --- FRESH GUARANTEE ---
 
 model Claim {
-  id            String      @id @default(uuid()) @db.Uuid
-  order_id      String      @db.Uuid
-  user_id       String      @db.Uuid
-  status        ClaimStatus @default(pending)
-  issue_type    String?
-  description   String?     @db.Text
+  id            String   @id @default(uuid())
+  order_id      String   @unique
+  user_id       String
+  issue_type    String
+  description   String?
   photo_urls    String[]
-  refund_type   String?
-  refund_amount Decimal     @db.Decimal(10, 2)
-  reject_reason String?     @db.Text
-  created_at    DateTime    @default(now())
-
-  order         Order       @relation(fields: [order_id], references: [id])
-  user          User        @relation(fields: [user_id], references: [id])
-
-  @@map("claims")
+  refund_type   String   // full | partial
+  refund_amount Decimal
+  status        String   // pending | approved | rejected
+  reject_reason String?
+  created_at    DateTime @default(now())
+  order         Order    @relation(fields: [order_id], references: [id])
+  user          User     @relation(fields: [user_id], references: [id])
 }
 
-model FCMToken {
-  id          String      @id @default(uuid()) @db.Uuid
-  user_id     String      @db.Uuid
-  token       String      @unique @db.Text
-  device_type DeviceType  @default(android)
-  updated_at  DateTime    @updatedAt
+// --- PRICE ALERT & ANALYTICS ---
 
-  user        User        @relation("UserTokens", fields: [user_id], references: [id])
-
-  @@map("fcm_tokens")
+model PriceAlert {
+  id           String    @id @default(uuid())
+  user_id      String
+  product_id   String
+  target_price Decimal
+  is_active    Boolean   @default(true)
+  triggered_at DateTime?
+  created_at   DateTime  @default(now())
+  user         User      @relation(fields: [user_id], references: [id])
+  product      Product   @relation(fields: [product_id], references: [id])
 }
 
-model Notification {
-  id          String      @id @default(uuid()) @db.Uuid
-  user_id     String      @db.Uuid
-  title       String
-  body        String      @db.Text
-  data        Json?
-  is_read     Boolean     @default(false)
-  created_at  DateTime    @default(now())
+model CommodityPrice {
+  id        String   @id @default(uuid())
+  commodity String
+  category  String
+  region    String
+  price     Decimal
+  date      DateTime
+  source    String?
+}
 
-  user        User        @relation("UserNotifications", fields: [user_id], references: [id])
+// --- GROUP BUY ---
 
-  @@map("notifications")
+model GroupBuy {
+  id           String           @id @default(uuid())
+  initiator_id String
+  product_id   String
+  target_qty   Int
+  current_qty  Int              @default(0)
+  price_group  Decimal
+  end_time     DateTime
+  status       String           // active | success | failed
+  created_at   DateTime         @default(now())
+  initiator    User             @relation("InitiatorGroupBuy", fields: [initiator_id], references: [id])
+  product      Product          @relation(fields: [product_id], references: [id])
+  members      GroupBuyMember[]
+}
+
+model GroupBuyMember {
+  id           String   @id @default(uuid())
+  group_buy_id String
+  user_id      String
+  qty          Int
+  paid         Boolean  @default(false)
+  joined_at    DateTime @default(now())
+  group_buy    GroupBuy @relation(fields: [group_buy_id], references: [id])
+  user         User     @relation(fields: [user_id], references: [id])
+}
+
+// --- GIFT & HAMPER ---
+
+model HamperPreset {
+  id          String  @id @default(uuid())
+  name        String
+  description String?
+  items       Json
+  price       Decimal
+  image_url   String?
+  category    String
+}
+
+model GiftCard {
+  id       String @id @default(uuid())
+  order_id String
+  message  String
+  design   String
+  created_at DateTime @default(now())
+}
+
+// --- NEWS ---
+
+model NewsArticle {
+  id         String   @id @default(uuid())
+  title      String
+  content    String
+  category   String
+  image_url  String?
+  author     String
+  is_breaking Boolean @default(false)
+  published_at DateTime @default(now())
+  bookmarks  NewsBookmark[]
+}
+
+model NewsBookmark {
+  id         String      @id @default(uuid())
+  user_id    String
+  article_id String
+  created_at DateTime    @default(now())
+  user       User        @relation(fields: [user_id], references: [id])
+  article    NewsArticle @relation(fields: [article_id], references: [id])
+}
+
+// --- HOTEL & RESTORAN ---
+
+model Subscription {
+  id                String      @id @default(uuid())
+  hotel_id          String
+  coop_id           String
+  product_id        String
+  qty_per_delivery  Int
+  frequency         String      // daily | weekly | biweekly | monthly
+  delivery_day      Int
+  start_date        DateTime
+  end_date          DateTime
+  price_locked      Decimal
+  status            String      // active | paused | cancelled | expired
+  created_at        DateTime    @default(now())
+  hotel             User        @relation("HotelSubscriptions", fields: [hotel_id], references: [id])
+  cooperative       Cooperative @relation("CoopSubscriptions", fields: [coop_id], references: [id])
+}
+
+model BulkOrder {
+  id               String   @id @default(uuid())
+  hotel_id         String
+  items            Json
+  total            Decimal
+  delivery_date    DateTime
+  delivery_address Json
+  note             String?
+  status           String   // pending | confirmed | processing | delivered
+  created_at       DateTime @default(now())
+  hotel            User     @relation(fields: [hotel_id], references: [id])
+}
+
+model Invoice {
+  id           String   @id @default(uuid())
+  hotel_id     String
+  orders       Json
+  period_start DateTime
+  period_end   DateTime
+  subtotal     Decimal
+  tax          Decimal
+  total        Decimal
+  status       String   // draft | sent | paid | overdue
+  due_date     DateTime
+  pdf_url      String?
+  created_at   DateTime @default(now())
+  hotel        User     @relation(fields: [hotel_id], references: [id])
+}
+
+// --- EKSPORTIR ---
+
+model RfqRequest {
+  id                      String     @id @default(uuid())
+  exporter_id             String
+  title                   String
+  commodity               String
+  category                String
+  quantity                Decimal
+  unit                    String
+  target_price_per_unit   Decimal
+  currency                String     // IDR | USD | EUR | JPY | SGD | AUD
+  delivery_port           String
+  required_certifications String[]
+  delivery_deadline       DateTime
+  description             String?
+  status                  String     // open | closed | awarded
+  created_at              DateTime   @default(now())
+  exporter                User       @relation(fields: [exporter_id], references: [id])
+  quotes                  RfqQuote[]
+}
+
+model RfqQuote {
+  id                     String      @id @default(uuid())
+  rfq_id                 String
+  coop_id                String
+  price_per_unit         Decimal
+  total_price            Decimal
+  available_quantity     Decimal
+  delivery_date          DateTime
+  notes                  String?
+  certifications_available String[]
+  status                 String      // pending | accepted | rejected
+  created_at             DateTime    @default(now())
+  rfq                    RfqRequest  @relation(fields: [rfq_id], references: [id])
+  cooperative            Cooperative @relation(fields: [coop_id], references: [id])
+}
+
+model ExportDocument {
+  id          String   @id @default(uuid())
+  exporter_id String
+  order_id    String?
+  rfq_id      String?
+  doc_type    String   // phytosanitary | health_certificate | certificate_of_origin | packing_list | commercial_invoice | bill_of_lading
+  doc_url     String
+  issued_by   String
+  issue_date  DateTime
+  expiry_date DateTime
+  status      String   // draft | submitted | approved | expired
+  created_at  DateTime @default(now())
+  exporter    User     @relation(fields: [exporter_id], references: [id])
+}
+
+model CurrencyRate {
+  id            String   @id @default(uuid())
+  from_currency String
+  to_currency   String
+  rate          Decimal  @db.Decimal(18, 6)
+  updated_at    DateTime @updatedAt
+}
+
+// --- ADMIN ---
+
+model AdminLog {
+  id          String   @id @default(uuid())
+  admin_id    String
+  action      String
+  target_type String
+  target_id   String?
+  detail      Json?
+  created_at  DateTime @default(now())
+  admin       User     @relation("AdminActions", fields: [admin_id], references: [id])
 }

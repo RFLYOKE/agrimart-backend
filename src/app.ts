@@ -25,7 +25,7 @@ app.use(helmet());
 
 // CORS configuration
 app.use(cors({
-  origin: env.isDevelopment ? '*' : [
+  origin: env.NODE_ENV === 'development' ? '*' : [
     // Add production frontend URLs here
   ],
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
@@ -34,7 +34,7 @@ app.use(cors({
 }));
 
 // Request logging
-app.use(morgan(env.isDevelopment ? 'dev' : 'combined'));
+app.use(morgan(env.NODE_ENV === 'development' ? 'dev' : 'combined'));
 
 // Body parsing
 app.use(express.json({ limit: '10mb' }));

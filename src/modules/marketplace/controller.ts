@@ -3,7 +3,7 @@ import { MarketplaceService } from './service';
 import { successResponse, errorResponse } from '../../utils/response';
 import { paginate, paginationMeta } from '../../utils/pagination';
 import { AuthRequest } from '../../middleware/auth';
-import { OrderStatus } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 
 const service = new MarketplaceService();
 
@@ -91,10 +91,10 @@ export class MarketplaceController {
       const { skip, take } = paginate(page, limit);
 
       const filters = {
-        status: req.query.status as OrderStatus | undefined,
+        status: req.query.status as string | undefined,
       };
 
-      const { total, orders } = await service.getMyOrders(userId, filters, skip, take);
+      const { total, orders } = await service.getMyOrders(userId, filters as any, skip, take);
       const meta = paginationMeta(total, page, limit);
 
       return successResponse(res, { orders, meta }, 'Orders retrieved successfully');
@@ -110,11 +110,11 @@ export class MarketplaceController {
       const { status } = req.body;
 
       if (!userId) return errorResponse(res, 'Unauthorized', 401);
-      if (!status || !Object.values(OrderStatus).includes(status as OrderStatus)) {
+      if (!status) {
         return errorResponse(res, 'Invalid status', 400);
       }
 
-      const order = await service.updateOrderStatus(id, userId, status as OrderStatus);
+      const order = await service.updateOrderStatus(id, userId, status as string);
       return successResponse(res, order, 'Order status updated successfully');
     } catch (error: any) {
       return errorResponse(res, error.message || 'Failed to update order status', 400);

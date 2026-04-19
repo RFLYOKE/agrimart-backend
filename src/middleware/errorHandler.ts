@@ -49,7 +49,7 @@ export const errorHandler = (
   }
 
   // Log error in development
-  if (env.isDevelopment) {
+  if (env.NODE_ENV === 'development') {
     console.error('❌ Error:', {
       message: err.message,
       stack: err.stack,
@@ -60,6 +60,6 @@ export const errorHandler = (
   res.status(statusCode).json({
     success: false,
     message,
-    ...(env.isDevelopment && { stack: err.stack }),
+    stack: env.NODE_ENV === 'development' ? err.stack : undefined,
   });
 };

@@ -1,53 +1,36 @@
 import dotenv from 'dotenv';
+import { z } from 'zod';
 
 dotenv.config();
 
-/**
- * Validasi environment variables yang wajib ada.
- */
-const requiredEnvVars = [
-  'PORT',
-  'DATABASE_URL',
-  'REDIS_URL',
-  'JWT_SECRET',
-  'JWT_REFRESH_SECRET'
-];
+const envSchema = z.object({
+  PORT: z.string().default('5000'),
+  NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
+  DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
+  REDIS_URL: z.string().min(1, 'REDIS_URL is required'),
+  JWT_SECRET: z.string().min(1, 'JWT_SECRET is required'),
+  JWT_REFRESH_SECRET: z.string().min(1, 'JWT_REFRESH_SECRET is required'),
+  MIDTRANS_SERVER_KEY: z.string().min(1, 'MIDTRANS_SERVER_KEY is required'),
+  MIDTRANS_CLIENT_KEY: z.string().min(1, 'MIDTRANS_CLIENT_KEY is required'),
+  MIDTRANS_IS_PRODUCTION: z.string()
+    .default('false')
+    .transform((val) => val === 'true'),
+  FCM_SERVICE_ACCOUNT: z.string().min(1, 'FCM_SERVICE_ACCOUNT is required'),
+  AWS_S3_BUCKET: z.string().min(1, 'AWS_S3_BUCKET is required'),
+  AWS_REGION: z.string().min(1, 'AWS_REGION is required'),
+  AWS_ACCESS_KEY_ID: z.string().min(1, 'AWS_ACCESS_KEY_ID is required'),
+  AWS_SECRET_ACCESS_KEY: z.string().min(1, 'AWS_SECRET_ACCESS_KEY is required'),
+  EXCHANGE_RATE_API_KEY: z.string().min(1, 'EXCHANGE_RATE_API_KEY is required'),
+  TWILIO_ACCOUNT_SID: z.string().min(1, 'TWILIO_ACCOUNT_SID is required'),
+  TWILIO_AUTH_TOKEN: z.string().min(1, 'TWILIO_AUTH_TOKEN is required'),
+  TWILIO_PHONE_NUMBER: z.string().min(1, 'TWILIO_PHONE_NUMBER is required'),
+});
 
-for (const envVar of requiredEnvVars) {
-  if (!process.env[envVar]) {
-    throw new Error(`Missing required environment variable: ${envVar}`);
-  }
+const _env = envSchema.safeParse(process.env);
+
+if (!_env.success) {
+  console.error('❌ Invalid environment variables:', _env.error.format());
+  throw new Error('Environment variables validation failed. Please check your .env file.');
 }
 
-export const env = {
-  // Server
-  PORT: parseInt(process.env.PORT || '5000', 10),
-  NODE_ENV: process.env.NODE_ENV || 'development',
-
-  // Database
-  DATABASE_URL: process.env.DATABASE_URL as string,
-
-  // Redis
-  REDIS_URL: process.env.REDIS_URL as string,
-
-  // JWT
-  JWT_SECRET: process.env.JWT_SECRET as string,
-  JWT_REFRESH_SECRET: process.env.JWT_REFRESH_SECRET as string,
-
-  // Midtrans
-  MIDTRANS_SERVER_KEY: process.env.MIDTRANS_SERVER_KEY || '',
-  MIDTRANS_CLIENT_KEY: process.env.MIDTRANS_CLIENT_KEY || '',
-
-  // FCM
-  FCM_SERVER_KEY: process.env.FCM_SERVER_KEY || '',
-
-  // AWS S3
-  AWS_S3_BUCKET: process.env.AWS_S3_BUCKET || '',
-  AWS_REGION: process.env.AWS_REGION || '',
-  AWS_ACCESS_KEY: process.env.AWS_ACCESS_KEY || '',
-  AWS_SECRET_KEY: process.env.AWS_SECRET_KEY || '',
-
-  // Helper
-  isDevelopment: process.env.NODE_ENV === 'development',
-  isProduction: process.env.NODE_ENV === 'production',
-};
+export const env = _env.data;

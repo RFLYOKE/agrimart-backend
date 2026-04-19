@@ -4,7 +4,6 @@ import { prisma } from '../../config/db';
 import redisClient from '../../config/redis';
 import { env } from '../../config/env';
 import { RegisterInput, LoginInput } from './schema';
-import { UserRole } from '@prisma/client';
 
 export class AuthService {
   private generateTokens(userId: string, role: string) {
@@ -44,16 +43,17 @@ export class AuthService {
           email: data.email,
           password_hash: hashedPassword,
           phone: data.phone,
-          role: data.role as UserRole,
+          role: data.role as any,
         },
       });
 
       if (data.role === 'koperasi') {
-        await tx.cooperative.create({
+        await (tx as any).cooperative.create({
           data: {
             user_id: newUser.id,
             name: `${data.name} Cooperative`,
             location: 'Not specified',
+            sector: 'pertanian',
             description: null,
             cert_status: 'pending',
           },
@@ -88,7 +88,7 @@ export class AuthService {
       throw new Error('Invalid email or password');
     }
 
-    const isPasswordValid = await bcrypt.compare(data.password, user.password_hash);
+    const isPasswordValid = await bcrypt.compare(data.password, user.password_hash || "");
 
     if (!isPasswordValid) {
       throw new Error('Invalid email or password');

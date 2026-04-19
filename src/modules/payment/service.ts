@@ -2,8 +2,6 @@ import crypto from 'crypto';
 import prisma from '../../config/db';
 import { snap, coreApi } from '../../config/midtrans';
 import { env } from '../../config/env';
-import { OrderStatus } from '@prisma/client';
-
 export class PaymentService {
   async createSnapTransaction(orderId: string, amount: number, customerDetails: any, itemDetails: any[]) {
     const parameter = {
@@ -39,28 +37,28 @@ export class PaymentService {
         throw new Error('Invalid signature key');
       }
 
-      let newStatus: OrderStatus | undefined;
+      let newStatus: string | undefined;
 
       if (transactionStatus === 'capture') {
         if (fraudStatus === 'accept') {
-          newStatus = OrderStatus.paid;
+          newStatus = 'paid';
         }
       } else if (transactionStatus === 'settlement') {
-        newStatus = OrderStatus.paid;
+        newStatus = 'paid';
       } else if (
         transactionStatus === 'cancel' ||
         transactionStatus === 'deny' ||
         transactionStatus === 'expire'
       ) {
-        newStatus = OrderStatus.cancelled;
+        newStatus = 'cancelled';
       } else if (transactionStatus === 'pending') {
-        newStatus = OrderStatus.pending;
+        newStatus = 'pending';
       }
 
       if (newStatus) {
         const order = await prisma.order.update({
           where: { id: orderId },
-          data: { status: newStatus },
+          data: { status: newStatus } as any,
         });
 
         // Mock notification to buyer
