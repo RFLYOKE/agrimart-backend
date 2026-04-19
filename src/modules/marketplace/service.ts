@@ -2,10 +2,7 @@ import prisma from '../../config/db';
 import { CreateProductType, UpdateProductType, CreateOrderType, OrderFilterQueryType } from './schema';
 import { OrderStatus } from '@prisma/client';
 
-// Mock payment service function
-const createPayment = async (orderId: string, amount: number, method: string) => {
-  return `https://app.sandbox.midtrans.com/payment/${orderId}`;
-};
+import { paymentService } from '../payment/service';
 
 interface ProductFilters {
   category?: string;
@@ -138,6 +135,7 @@ export class MarketplaceService {
       const isB2B = buyer.role === 'hotel_restoran' || buyer.role === 'eksportir';
 
       const orderItemsData = [];
+      const midtransItemDetails = [];
 
       for (const item of data.items) {
         const product = await tx.product.findUnique({
@@ -166,6 +164,13 @@ export class MarketplaceService {
           qty: item.qty,
           price_at_order: price,
         });
+
+        midtransItemDetails.push({
+          id: product.id,
+          price: price,
+          quantity: item.qty,
+          name: product.name.substring(0, 50),
+        });
       }
 
       const order = await tx.order.create({
@@ -182,9 +187,24 @@ export class MarketplaceService {
         include: { items: true },
       });
 
-      const payment_url = await createPayment(order.id, totalPrice, data.payment_method);
+      const customerDetails = {
+        first_name: buyer.name,
+        email: buyer.email,
+        phone: buyer.phone || undefined,
+      };
 
-      return { order, payment_url };
+      const snapTransaction = await paymentService.createSnapTransaction(
+        order.id,
+        totalPrice,
+        customerDetails,
+        midtransItemDetails
+      );
+
+      return {
+        order,
+        snap_token: snapTransaction.token,
+        redirect_url: snapTransaction.redirect_url,
+      };
     });
   }
 
