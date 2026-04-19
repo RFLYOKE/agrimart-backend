@@ -1,0 +1,228 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum UserRole {
+  koperasi
+  konsumen
+  hotel_restoran
+  eksportir
+  admin
+}
+
+enum OrderStatus {
+  pending
+  paid
+  processing
+  shipped
+  delivered
+  cancelled
+}
+
+enum AuctionType {
+  flash
+  regular
+}
+
+enum AuctionStatus {
+  active
+  closed
+  cancelled
+}
+
+enum SessionStatus {
+  booked
+  active
+  ended
+}
+
+enum MessageType {
+  text
+  image
+  document
+}
+
+enum ClaimStatus {
+  pending
+  approved
+  rejected
+}
+
+model User {
+  id               String            @id @default(uuid()) @db.Uuid
+  role             UserRole
+  name             String
+  phone            String?
+  email            String            @unique
+  password_hash    String
+  status           String            @default("active")
+  created_at       DateTime          @default(now())
+
+  cooperative      Cooperative?
+  orders           Order[]           @relation("BuyerOrders")
+  bids             Bid[]
+  consult_sessions_as_user ConsultSession[] @relation("SessionUser")
+  consult_sessions_as_consultant ConsultSession[] @relation("SessionConsultant")
+  messages         Message[]
+  price_alerts     PriceAlert[]
+  claims           Claim[]
+
+  @@map("users")
+}
+
+model Cooperative {
+  id           String    @id @default(uuid()) @db.Uuid
+  user_id      String    @unique @db.Uuid
+  name         String
+  location     String
+  description  String?
+  cert_status  String?
+  verified_at  DateTime?
+  fresh_rate   Float?
+
+  user         User      @relation(fields: [user_id], references: [id])
+  products     Product[]
+
+  @@map("cooperatives")
+}
+
+model Product {
+  id           String       @id @default(uuid()) @db.Uuid
+  coop_id      String       @db.Uuid
+  name         String
+  description  String?
+  price_b2c    Decimal      @db.Decimal(10, 2)
+  price_b2b    Decimal      @db.Decimal(10, 2)
+  stock        Int
+  category     String?
+  images       String[]
+  is_active    Boolean      @default(true)
+  created_at   DateTime     @default(now())
+
+  cooperative  Cooperative  @relation(fields: [coop_id], references: [id])
+  order_items  OrderItem[]
+  auctions     Auction[]
+  price_alerts PriceAlert[]
+
+  @@map("products")
+}
+
+model Order {
+  id             String      @id @default(uuid()) @db.Uuid
+  buyer_id       String      @db.Uuid
+  total          Decimal     @db.Decimal(10, 2)
+  status         OrderStatus @default(pending)
+  payment_method String?
+  address        Json?
+  created_at     DateTime    @default(now())
+
+  buyer          User        @relation("BuyerOrders", fields: [buyer_id], references: [id])
+  items          OrderItem[]
+  claims         Claim[]
+
+  @@map("orders")
+}
+
+model OrderItem {
+  id             String  @id @default(uuid()) @db.Uuid
+  order_id       String  @db.Uuid
+  product_id     String  @db.Uuid
+  qty            Int
+  price_at_order Decimal @db.Decimal(10, 2)
+
+  order          Order   @relation(fields: [order_id], references: [id])
+  product        Product @relation(fields: [product_id], references: [id])
+
+  @@map("order_items")
+}
+
+model Auction {
+  id            String        @id @default(uuid()) @db.Uuid
+  product_id    String        @db.Uuid
+  type          AuctionType
+  start_price   Decimal       @db.Decimal(10, 2)
+  current_price Decimal       @db.Decimal(10, 2)
+  end_time      DateTime
+  status        AuctionStatus @default(active)
+
+  product       Product       @relation(fields: [product_id], references: [id])
+  bids          Bid[]
+
+  @@map("auctions")
+}
+
+model Bid {
+  id         String   @id @default(uuid()) @db.Uuid
+  auction_id String   @db.Uuid
+  user_id    String   @db.Uuid
+  amount     Decimal  @db.Decimal(10, 2)
+  created_at DateTime @default(now())
+
+  auction    Auction  @relation(fields: [auction_id], references: [id])
+  user       User     @relation(fields: [user_id], references: [id])
+
+  @@map("bids")
+}
+
+model ConsultSession {
+  id            String        @id @default(uuid()) @db.Uuid
+  user_id       String        @db.Uuid
+  consultant_id String        @db.Uuid
+  status        SessionStatus @default(booked)
+  duration_min  Int
+  started_at    DateTime?
+  ended_at      DateTime?
+
+  user          User          @relation("SessionUser", fields: [user_id], references: [id])
+  consultant    User          @relation("SessionConsultant", fields: [consultant_id], references: [id])
+  messages      Message[]
+
+  @@map("consult_sessions")
+}
+
+model Message {
+  id         String      @id @default(uuid()) @db.Uuid
+  session_id String      @db.Uuid
+  sender_id  String      @db.Uuid
+  content    String      @db.Text
+  type       MessageType @default(text)
+  sent_at    DateTime    @default(now())
+
+  session    ConsultSession @relation(fields: [session_id], references: [id])
+  sender     User           @relation(fields: [sender_id], references: [id])
+
+  @@map("messages")
+}
+
+model PriceAlert {
+  id           String    @id @default(uuid()) @db.Uuid
+  user_id      String    @db.Uuid
+  product_id   String    @db.Uuid
+  target_price Decimal   @db.Decimal(10, 2)
+  is_active    Boolean   @default(true)
+  triggered_at DateTime?
+
+  user         User      @relation(fields: [user_id], references: [id])
+  product      Product   @relation(fields: [product_id], references: [id])
+
+  @@map("price_alerts")
+}
+
+model Claim {
+  id            String      @id @default(uuid()) @db.Uuid
+  order_id      String      @db.Uuid
+  user_id       String      @db.Uuid
+  status        ClaimStatus @default(pending)
+  photo_urls    String[]
+  refund_amount Decimal     @db.Decimal(10, 2)
+  created_at    DateTime    @default(now())
+
+  order         Order       @relation(fields: [order_id], references: [id])
+  user          User        @relation(fields: [user_id], references: [id])
+
+  @@map("claims")
+}
