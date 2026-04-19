@@ -1,57 +1,35 @@
 import { Request, Response } from 'express';
-import { NotificationService } from './service';
+import { notificationService } from './service';
 import { successResponse, errorResponse } from '../../utils/response';
-
-const service = new NotificationService();
+import { AuthRequest } from '../../middleware/auth';
 
 export class NotificationController {
-  async getNotifications(req: Request, res: Response): Promise<void> {
+  async registerToken(req: AuthRequest, res: Response): Promise<any> {
     try {
-      const result = await service.getNotifications(req.query);
-      successResponse(res, result, 'Notifications fetched successfully');
-    } catch (error: unknown) {
-      const err = error as Error;
-      errorResponse(res, err.message || 'Failed to fetch notifications', 500);
+      const userId = req.user?.id;
+      const { token, device_type } = req.body;
+
+      if (!userId) return errorResponse(res, 'Unauthorized', 401);
+      if (!token) return errorResponse(res, 'FCM token is required', 400);
+
+      const type = device_type && ['android', 'ios', 'web'].includes(device_type) ? device_type : 'android';
+
+      await notificationService.registerToken(userId, token, type);
+      return successResponse(res, null, 'FCM token registered successfully');
+    } catch (error: any) {
+      return errorResponse(res, error.message || 'Failed to register token', 400);
     }
   }
 
-  async getUnreadCount(_req: Request, res: Response): Promise<void> {
+  async getHistory(req: AuthRequest, res: Response): Promise<any> {
     try {
-      const result = await service.getUnreadCount();
-      successResponse(res, result, 'Unread count fetched successfully');
-    } catch (error: unknown) {
-      const err = error as Error;
-      errorResponse(res, err.message || 'Failed to fetch unread count', 500);
-    }
-  }
+      const userId = req.user?.id;
+      if (!userId) return errorResponse(res, 'Unauthorized', 401);
 
-  async markAsRead(req: Request, res: Response): Promise<void> {
-    try {
-      const result = await service.markAsRead(req.params.id as string);
-      successResponse(res, result, 'Notification marked as read');
-    } catch (error: unknown) {
-      const err = error as Error;
-      errorResponse(res, err.message || 'Failed to mark notification', 400);
-    }
-  }
-
-  async markAllAsRead(_req: Request, res: Response): Promise<void> {
-    try {
-      const result = await service.markAllAsRead();
-      successResponse(res, result, 'All notifications marked as read');
-    } catch (error: unknown) {
-      const err = error as Error;
-      errorResponse(res, err.message || 'Failed to mark all notifications', 500);
-    }
-  }
-
-  async deleteNotification(req: Request, res: Response): Promise<void> {
-    try {
-      await service.deleteNotification(req.params.id as string);
-      successResponse(res, null, 'Notification deleted successfully');
-    } catch (error: unknown) {
-      const err = error as Error;
-      errorResponse(res, err.message || 'Failed to delete notification', 500);
+      const history = await notificationService.getNotifications(userId);
+      return successResponse(res, history, 'Notification history retrieved safely');
+    } catch (error: any) {
+      return errorResponse(res, error.message || 'Failed to retrieve notification history', 400);
     }
   }
 }

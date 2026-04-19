@@ -52,6 +52,12 @@ enum ClaimStatus {
   rejected
 }
 
+enum DeviceType {
+  android
+  ios
+  web
+}
+
 model User {
   id               String            @id @default(uuid()) @db.Uuid
   role             UserRole
@@ -70,6 +76,8 @@ model User {
   messages         Message[]
   price_alerts     PriceAlert[]
   claims           Claim[]
+  fcm_tokens       FCMToken[]        @relation("UserTokens")
+  notifications    Notification[]    @relation("UserNotifications")
 
   @@map("users")
 }
@@ -225,4 +233,30 @@ model Claim {
   user          User        @relation(fields: [user_id], references: [id])
 
   @@map("claims")
+}
+
+model FCMToken {
+  id          String      @id @default(uuid()) @db.Uuid
+  user_id     String      @db.Uuid
+  token       String      @unique @db.Text
+  device_type DeviceType  @default(android)
+  updated_at  DateTime    @updatedAt
+
+  user        User        @relation("UserTokens", fields: [user_id], references: [id])
+
+  @@map("fcm_tokens")
+}
+
+model Notification {
+  id          String      @id @default(uuid()) @db.Uuid
+  user_id     String      @db.Uuid
+  title       String
+  body        String      @db.Text
+  data        Json?
+  is_read     Boolean     @default(false)
+  created_at  DateTime    @default(now())
+
+  user        User        @relation("UserNotifications", fields: [user_id], references: [id])
+
+  @@map("notifications")
 }
