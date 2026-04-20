@@ -5,6 +5,8 @@ import morgan from 'morgan';
 import rateLimit from 'express-rate-limit';
 import { env } from './config/env';
 import { notFoundHandler, errorHandler } from './middleware/errorHandler';
+import { prisma } from './config/db';
+import { redisClient } from './config/redis';
 
 // Import module routes
 import authRoutes from './modules/auth/routes';
@@ -66,12 +68,41 @@ app.get('/', (_req, res) => {
   });
 });
 
-app.get('/api/health', (_req, res) => {
-  res.json({
-    success: true,
-    message: 'Server is healthy',
-    uptime: process.uptime(),
+// Simple health check for Docker HEALTHCHECK (no DB/Redis check)
+app.get('/health', (_req, res) => {
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+app.get('/api/health', async (_req, res) => {
+  let dbStatus = 'disconnected';
+  let redisStatus = 'disconnected';
+
+  // Check PostgreSQL connection
+  try {
+    await prisma.$queryRawUnsafe('SELECT 1');
+    dbStatus = 'connected';
+  } catch (_err) {
+    dbStatus = 'error';
+  }
+
+  // Check Redis connection
+  try {
+    const pong = await redisClient.ping();
+    redisStatus = pong === 'PONG' ? 'connected' : 'error';
+  } catch (_err) {
+    redisStatus = 'error';
+  }
+
+  const isHealthy = dbStatus === 'connected' && redisStatus === 'connected';
+
+  res.status(isHealthy ? 200 : 503).json({
+    status: isHealthy ? 'ok' : 'degraded',
     timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    services: {
+      database: dbStatus,
+      redis: redisStatus,
+    },
   });
 });
 
