@@ -6,6 +6,8 @@ import { consultSocketHandler } from './modules/consult/socket';
 import { auctionSocketHandler } from './modules/auction/socket';
 import { startAuctionCron } from './modules/auction/cron';
 import { startAnalyticsCron } from './modules/analytics/cron';
+import { startHotelSubscriptionCron } from './modules/hotel/cron';
+import { startExporterCrons } from './modules/exporter/cron';
 
 const PORT = env.PORT;
 
@@ -24,6 +26,8 @@ auctionSocketHandler(io);
 // Initialize Background Cron Jobs
 startAuctionCron();
 startAnalyticsCron();
+startHotelSubscriptionCron();
+startExporterCrons();
 
 // Graceful shutdown
 const gracefulShutdown = (signal: string) => {

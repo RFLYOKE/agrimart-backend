@@ -15,6 +15,9 @@ import auctionRoutes from './modules/auction/routes';
 import consultRoutes from './modules/consult/routes';
 import notificationRoutes from './modules/notification/routes';
 import freshGuaranteeRoutes from './modules/fresh-guarantee/routes';
+import adminRoutes from './modules/admin/routes';
+import hotelRoutes from './modules/hotel/routes';
+import exporterRoutes, { rfqKoperasiRoutes } from './modules/exporter/routes';
 
 const app: Application = express();
 
@@ -116,6 +119,10 @@ app.use('/api/auctions', auctionRoutes);
 app.use('/api/consult', consultRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/fresh-guarantee', freshGuaranteeRoutes);
+app.use('/api/admin', adminRoutes);
+app.use('/api/hotel', hotelRoutes);
+app.use('/api/exporter', exporterRoutes);
+app.use('/api/rfq', rfqKoperasiRoutes);
 
 // ============================================
 // Error Handling
