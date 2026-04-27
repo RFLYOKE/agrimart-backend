@@ -26,3 +26,5 @@ npm-debug.log*
 coverage/
 
 /src/generated/prisma
+
+agrimart-c399c-firebase-adminsdk-fbsvc-9285aa8b6b.json
